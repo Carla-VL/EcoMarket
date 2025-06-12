@@ -1,16 +1,18 @@
 package com.ecomarket.product.controller;
 
+import com.ecomarket.product.assembler.ProductModelAssembler;
 import com.ecomarket.product.model.Product;
 import com.ecomarket.product.service.ProductService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.CollectionModel;
-import org.springframework.web.bind.annotation.*;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
 
 @RestController
 @RequestMapping("/api/products")
@@ -18,42 +20,45 @@ import java.util.stream.Collectors;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductModelAssembler assembler;
 
     @GetMapping
     public ResponseEntity<CollectionModel<EntityModel<Product>>> getAll() {
         List<EntityModel<Product>> products = productService.findAll().stream()
-            .map(product -> EntityModel.of(product,
-                linkTo(methodOn(ProductController.class).getById(product.getId())).withSelfRel(),
-                linkTo(methodOn(ProductController.class).getAll()).withRel("products")))
+            .map(assembler::toModel)
             .collect(Collectors.toList());
-        return ResponseEntity.ok(CollectionModel.of(products,
-            linkTo(methodOn(ProductController.class).getAll()).withSelfRel()));
+
+        CollectionModel<EntityModel<Product>> collection = CollectionModel.of(
+            products,
+            linkTo(methodOn(ProductController.class).getAll()).withSelfRel()
+        );
+
+        return ResponseEntity.ok(collection);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<EntityModel<Product>> getById(@PathVariable Long id) {
-        Product p = productService.findById(id);
-        return ResponseEntity.ok(EntityModel.of(p,
-            linkTo(methodOn(ProductController.class).getById(id)).withSelfRel(),
-            linkTo(methodOn(ProductController.class).getAll()).withRel("products")));
+        Product product = productService.findById(id);
+        return ResponseEntity.ok(assembler.toModel(product));
     }
 
     @PostMapping
     public ResponseEntity<EntityModel<Product>> create(@RequestBody Product product) {
         Product created = productService.create(product);
-        EntityModel<Product> model = EntityModel.of(created,
-            linkTo(methodOn(ProductController.class).getById(created.getId())).withSelfRel(),
-            linkTo(methodOn(ProductController.class).getAll()).withRel("products"));
-        return ResponseEntity.created(linkTo(methodOn(ProductController.class).getById(created.getId())).toUri()).body(model);
+        EntityModel<Product> model = assembler.toModel(created);
+
+        return ResponseEntity
+            .created(linkTo(methodOn(ProductController.class).getById(created.getId())).toUri())
+            .body(model);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<EntityModel<Product>> update(@PathVariable Long id, @RequestBody Product product) {
+    public ResponseEntity<EntityModel<Product>> update(
+        @PathVariable Long id,
+        @RequestBody Product product
+    ) {
         Product updated = productService.update(id, product);
-        EntityModel<Product> model = EntityModel.of(updated,
-            linkTo(methodOn(ProductController.class).getById(id)).withSelfRel(),
-            linkTo(methodOn(ProductController.class).getAll()).withRel("products"));
-        return ResponseEntity.ok(model);
+        return ResponseEntity.ok(assembler.toModel(updated));
     }
 
     @DeleteMapping("/{id}")
